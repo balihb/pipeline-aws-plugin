@@ -33,6 +33,7 @@ import java.util.Map;
 import java.util.Set;
 import java.nio.charset.Charset;
 
+import com.amazonaws.services.s3.transfer.model.UploadResult;
 import org.jenkinsci.plugins.workflow.steps.StepContext;
 import org.jenkinsci.plugins.workflow.steps.StepDescriptor;
 import org.jenkinsci.plugins.workflow.steps.StepExecution;
@@ -259,7 +260,31 @@ public class S3UploadStep extends AbstractS3Step {
 		}
 	}
 
-	public static class Execution extends SynchronousNonBlockingStepExecution<String> {
+	public static class S3UploadExectuionResult {
+		private final String s3UriString;
+
+		private final UploadResult uploadResult;
+
+		public S3UploadExectuionResult(String s3UriString, UploadResult uploadResult) {
+			this.s3UriString = s3UriString;
+			this.uploadResult = uploadResult;
+		}
+
+		public String getS3UriString() {
+			return s3UriString;
+		}
+
+		public UploadResult getUploadResult() {
+			return uploadResult;
+		}
+
+		@Override
+		public String toString() {
+			return s3UriString;
+		}
+	}
+
+	public static class Execution extends SynchronousNonBlockingStepExecution<S3UploadExectuionResult> {
 
 		protected static final long serialVersionUID = 1L;
 
@@ -271,7 +296,7 @@ public class S3UploadStep extends AbstractS3Step {
 		}
 
 		@Override
-		public String run() throws Exception {
+		public S3UploadExectuionResult run() throws Exception {
 			final String file = this.step.getFile();
 			final String text = this.step.getText();
 			final String bucket = this.step.getBucket();
@@ -375,6 +400,8 @@ public class S3UploadStep extends AbstractS3Step {
 					request.withRedirectLocation(redirectLocation);
 				}
 
+				UploadResult uploadResult = null;
+
 				try {
 					final Upload upload = mgr.upload(request);
 					upload.addProgressListener((ProgressListener) progressEvent -> {
@@ -384,14 +411,14 @@ public class S3UploadStep extends AbstractS3Step {
 							}
 						}
 					});
-					upload.waitForCompletion();
+					uploadResult = upload.waitForUploadResult();
 				}
 				finally{
 					mgr.shutdownNow();
 				}
 
 				listener.getLogger().println("Upload complete");
-				return String.format("s3://%s/%s", bucket, localPath);
+				return new S3UploadExectuionResult(String.format("s3://%s/%s", bucket, localPath), uploadResult);
 			} else if (children.isEmpty()) {
 				listener.getLogger().println("Nothing to upload");
 				return null;
@@ -406,7 +433,7 @@ public class S3UploadStep extends AbstractS3Step {
 				child.act(new RemoteUploader(Execution.this.step.createS3ClientOptions(), Execution.this.getContext().get(EnvVars.class), listener, bucket, path, metadatas, acl, cacheControl, contentEncoding, contentType, kmsId, sseAlgorithm, redirectLocation));
 
 				listener.getLogger().println("Upload complete");
-				return String.format("s3://%s/%s", bucket, path);
+				return new S3UploadExectuionResult(String.format("s3://%s/%s", bucket, path), null);
 			} else {
 				List<File> fileList = new ArrayList<>();
 				listener.getLogger().format("Uploading %s to s3://%s/%s %n", includePathPattern, bucket, path);
@@ -415,7 +442,7 @@ public class S3UploadStep extends AbstractS3Step {
 				}
 				dir.act(new RemoteListUploader(Execution.this.step.createS3ClientOptions(), Execution.this.getContext().get(EnvVars.class), listener, fileList, bucket, path, metadatas, acl, cacheControl, contentEncoding, contentType, kmsId, sseAlgorithm));
 				listener.getLogger().println("Upload complete");
-				return String.format("s3://%s/%s", bucket, path);
+				return new S3UploadExectuionResult(String.format("s3://%s/%s", bucket, path), null);
 			}
 		}
 

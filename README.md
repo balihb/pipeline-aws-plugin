@@ -241,6 +241,16 @@ Log messages can be less verbose. Disable it when you feel the logs are excessiv
 s3Upload(path: 'source/path/', bucket: 'my-bucket', verbose: false)
 ```
 
+Get extended information about the uploaded object.
+
+s3Upload returns an object with two property: s3UriString containing the S3 URI of the uploaded file and [uploadResult](https://docs.aws.amazon.com/AWSJavaSDK/latest/javadoc/com/amazonaws/services/s3/transfer/model/UploadResult.html) (can be null if not applicable) containing extended informations of the uploaded object. 
+
+```groovy
+def result = s3Upload(file:'file.txt', bucket:'my-bucket', path:'path/to/target/file.txt')
+echo result.s3UriString
+echo result.uploadResult.versionId
+```
+
 ### s3Download
 
 Download a file/folder from S3 to the local workspace.
